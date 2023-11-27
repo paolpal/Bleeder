@@ -2,6 +2,7 @@ import fitz  # PyMuPDF
 from PyPDF2 import PdfWriter, PdfReader, Transformation
 from PyPDF2.generic import RectangleObject
 from PyPDF2._page import PageObject
+import copy
 
 def create_blank_page(width, height):
     # Crea un oggetto PdfFileWriter
@@ -38,20 +39,32 @@ def add_bleed_margin(input_path, output_path, bleed_width):
         print(page_num,'/',len(pdf_reader.pages))
         pdf_page = pdf_reader.pages[page_num]
         translate = Transformation().translate(bleed_width,bleed_width)
-            # Crea una nuova pagina con le dimensioni modificate
-            #mb = pdf_page.mediabox
-            #print(mb)
-            #pdf_page.bleedbox = RectangleObject((mb.left, mb.bottom, mb.right, mb.top))
-            #pdf_page.bleedbox = RectangleObject([0, 0, new_width, new_height])
-        #new_pdf_page = PageObject(None, new_width, new_height)
+
+        # creo la pagina
         new_pdf_page = create_blank_page(new_width, new_height)
+        # posiziono il contenuto principale
         new_pdf_page.merge_page(pdf_page)
         new_pdf_page.add_transformation(translate)
-        pdf_writer.add_page(new_pdf_page)
-            # Copia il contenuto della pagina specchiata
-            #new_pdf_page.mergeTranslatedPage(pdf_page, bleed_width, 0)
-            #new_pdf_page.merge_page(pdf_page)
 
+        # mirror destra - sinistra
+        mirror = Transformation((-1,0,0,1,pdf_page.mediabox[2],0))
+        lr = copy.deepcopy(pdf_page)
+        lr.add_transformation(mirror)
+        translate_r = Transformation().translate(original_width+bleed_width,bleed_width)
+        translate_l = Transformation().translate(-(original_width-bleed_width),bleed_width)
+        new_pdf_page.mergeTransformedPage(lr,translate_r)
+        new_pdf_page.mergeTransformedPage(lr,translate_l)
+
+        # mirror sopra - sotto
+        mirror = Transformation((1,0,0,-1,0,pdf_page.mediabox[3]))
+        td = copy.deepcopy(pdf_page)
+        td.add_transformation(mirror)
+        translate_t = Transformation().translate(bleed_width,original_height+bleed_width)
+        translate_d = Transformation().translate(bleed_width,-original_height+bleed_width)
+        new_pdf_page.mergeTransformedPage(td,translate_t)
+        new_pdf_page.mergeTransformedPage(td,translate_d)
+
+        pdf_writer.add_page(new_pdf_page)
         if page_num >= 20:
             break
 
